@@ -1,0 +1,24 @@
+{
+  "name": "teamcity-cloud-agent-updater",
+  "version": "1.0.0",
+  "description": "Updates AMI & VHD references in TeamCity Cloud Agents",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OctopusDeploy/BuildAgentAutomation.git"
+  },
+  "author": "Matt Richardson",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/OctopusDeploy/BuildAgentAutomation/issues"
+  },
+  "homepage": "https://github.com/OctopusDeploy/BuildAgentAutomation#readme",
+  "dependencies": {
+    "commander": "2.6.0",
+    "node-horseman": "2.7.0",
+    "colors": "1.1.2"
+  }
+}
