@@ -25,10 +25,17 @@ if (!program.image || program.image == "") fail('Option "image" was not supplied
 if (!program.cloudprofile || program.cloudprofile == "") fail('Option "cloudprofile" was not supplied.')
 if (!program.agentprefix || program.agentprefix == "") fail('Option "agentprefix" was not supplied.')
 
+var phantomPath ='./node_modules/phantomjs-prebuilt/lib/phantom/bin/phantomjs'
+
+var isWin = /^win/.test(process.platform);
+if (isWin) {
+	phantomPath ='./node_modules/phantomjs-prebuilt/lib/phantom/bin/phantomjs.exe'
+}
+
 var loadPhantomInstance = function () {
 
   var options = {
-    phantomPath: './node_modules/phantomjs-prebuilt/lib/phantom/bin/phantomjs',
+    phantomPath: phantomPath,
     loadImages: true,
     injectJquery: true,
     webSecurity: true,
