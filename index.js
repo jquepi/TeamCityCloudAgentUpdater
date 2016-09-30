@@ -120,6 +120,29 @@ var openEditImageDialog = function () {
 	}, program.cloudprofile, program.agentprefix);
 }
 
+var openEditImageDialogAndValidateSetCorrectly = function () {
+  return phantom.evaluate(function(cloudprofile, agentprefix, image){
+    var json = $j('#source_images_json').attr('value');
+    var images = JSON.parse(json);
+
+    var index = -1;
+    $(images).each(function(elem, i){
+      if (elem['image-name-prefix'] == agentprefix) { index = i; }
+    });
+
+    if (index > -1) {
+      $j($j('table#amazonImagesTable').find('tr')[index + 1]).find('td')[0].click();
+      var currentImage = $j('#source-id option:selected').val();
+      if (currentImage == image)
+        console.log("TeamCityCloudAgentUpdater: INFO: Successfully updated cloud profile '" + cloudprofile + "'.");
+      else
+        throw "TeamCityCloudAgentUpdater: FATAL: Failed to update cloud image.";
+      return;
+    }
+    throw "TeamCityCloudAgentUpdater: FATAL: Unable to find cloud image with agent prefix '" + agentprefix + "'";
+  }, program.cloudprofile, program.agentprefix, program.image);
+}
+
 var cloudDetailsToBeLoaded = function() {
 	return $j('#amazonRefreshableParametersLoadingWrapper').is(":visible");
 }
@@ -152,10 +175,18 @@ phantom
 	.waitForNextPage()
 	.waitFor(cloudDetailsToBeLoaded)
 	.then(openEditImageDialog)
+  //update
 	.then(updateSelectedImage)
 	.click('[id="addImageButton"]')
 	.click('[id="createButton"]')
 	.waitForNextPage()
+  //validate
+  .open(program.server + "/admin/admin.html?item=clouds")
+  .waitForNextPage()
+  .then(openCloudProfile)
+  .waitForNextPage()
+  .waitFor(cloudDetailsToBeLoaded)
+  .then(openEditImageDialogAndValidateSetCorrectly)
 	.catch(function (err) {
         console.log('TeamCityCloudAgentUpdater: FATAL: ', err);
     })
