@@ -46,14 +46,26 @@ var loadPhantomInstance = function () {
 
   var phantomInstance = new Horseman(options);
 
+  function isOurMessage(msg) {
+    return msg.toString().indexOf('TeamCityCloudAgentUpdater') > -1;
+  }
+
+  function cleanupMessage(msg) {
+    return msg.toString()
+              .replace('TeamCityCloudAgentUpdater: ', '')
+              .replace('[object Object],[object Object]', '');
+  }
+
   phantomInstance.on('consoleMessage', function (msg) {
-  	if (msg.toString().indexOf('TeamCityCloudAgentUpdater') > -1)
-      console.log(colors.blue(msg));
+  	if (isOurMessage(msg))
+      console.log(colors.blue(cleanupMessage(msg)));
   });
 
   phantomInstance.on('error', function (msg) {
-  	if (msg.toString().indexOf('TeamCityCloudAgentUpdater') > -1)
-	  console.error(colors.red(msg));
+    if (isOurMessage(msg))
+	    console.error(colors.red(cleanupMessage(msg)));
+      if (msg.toString().indexOf("FATAL:") > -1)
+          process.exit(1);
   });
 
   return phantomInstance;
@@ -84,7 +96,7 @@ var openCloudProfile = function (){
 			$j(link).click();
 			return;
 		}
-		throw "TeamCityCloudAgentUpdater: Unable to find cloud profile '" + cloudprofile + "'";
+		throw "TeamCityCloudAgentUpdater: FATAL: Unable to find cloud profile '" + cloudprofile + "'";
 	}, program.cloudprofile);
 }
 
@@ -101,10 +113,10 @@ var openEditImageDialog = function () {
 		if (index > -1) {
 			$j($j('table#amazonImagesTable').find('tr')[index + 1]).find('td')[0].click();
 			var currentImage = $j('#source-id option:selected').val();
-			console.log("TeamCityCloudAgentUpdater: For cloud profile '" + cloudprofile + "', agents with prefix '" + agentprefix + "' are currently set to use image '" + currentImage + "'");
+			console.log("TeamCityCloudAgentUpdater: INFO: For cloud profile '" + cloudprofile + "', agents with prefix '" + agentprefix + "' are currently set to use image '" + currentImage + "'");
 			return;
 		}
-		throw "TeamCityCloudAgentUpdater: Unable to find cloud image with agent prefix '" + agentprefix + "'";
+		throw "TeamCityCloudAgentUpdater: FATAL: Unable to find cloud image with agent prefix '" + agentprefix + "' in cloud profile '" + cloudprofile + "'";
 	}, program.cloudprofile, program.agentprefix);
 }
 
@@ -116,14 +128,14 @@ var updateSelectedImage = function() {
 	return phantom.evaluate(function(cloudprofile, agentprefix, image){
 		var option = $j('#source-id option[value="' + image + '"]');
 	    if (option == null || option.length == 0)
-	    	throw "TeamCityCloudAgentUpdater: Unable to find image '" + image + "'."
+	    	throw "TeamCityCloudAgentUpdater: FATAL: Unable to find image '" + image + "'.";
 	    if (option.prop('selected')) {
-    		console.log("TeamCityCloudAgentUpdater: Cloud profile is already using correct image. Nothing to do.");
+    		console.log("TeamCityCloudAgentUpdater: INFO: Cloud profile is already using correct image. Nothing to do.");
     		return;
     	}
 		option.prop('selected', true);
 		$j('#source-id').change();
-		console.log("TeamCityCloudAgentUpdater: Updating cloud profile '" + cloudprofile + "' so that agents with prefix '" + agentprefix + "' will use image '" + image + "'");
+		console.log("TeamCityCloudAgentUpdater: INFO: Updating cloud profile '" + cloudprofile + "' so that agents with prefix '" + agentprefix + "' will use image '" + image + "'");
 	}, program.cloudprofile, program.agentprefix, program.image);
 }
 
@@ -145,7 +157,7 @@ phantom
 	.click('[id="createButton"]')
 	.waitForNextPage()
 	.catch(function (err) {
-        console.log('TeamCityCloudAgentUpdater: Error: ', err);
+        console.log('TeamCityCloudAgentUpdater: FATAL: ', err);
     })
     .finally(function() {
    		return phantom.close();
