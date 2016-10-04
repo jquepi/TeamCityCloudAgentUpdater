@@ -209,6 +209,11 @@ var updateSelectedImage = function() {
     }
     else {
       //azure
+      var currentImage = $j('input[name="imageUrl"]').val();
+      if (currentImage == image) {
+        console.log("TeamCityCloudAgentUpdater: INFO: Cloud profile is already using correct image. Nothing to do.");
+        return;
+      }
       $j('input[name="imageUrl"]').val(image)
       $j('input[name="imageUrl"]').change();
     }
