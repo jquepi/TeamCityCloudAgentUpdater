@@ -221,13 +221,22 @@ var updateSelectedImage = function() {
   }, program.cloudprofile, program.agentprefix, program.image);
 }
 
+var confirmLoggedIn = function() {
+  return phantom.evaluate(function(username) {
+    if ($j('input[name="submitLogin"]').length > 0)
+      throw "TeamCityCloudAgentUpdater: FATAL: Unable to login with username '" + username + "'.";
+    else
+      console.log("TeamCityCloudAgentUpdater: INFO: Successfully logged with username '" + username + "'.");
+  }, program.username);
+}
+
 phantom
   .open(program.server + "/login.html")
   .type('input[name="username"]', program.username)
   .type('input[name="password"]', program.password)
   .click('input[name="submitLogin"]')
   .waitForNextPage()
-  //todo: throw error if not logged in
+  .then(confirmLoggedIn)
   .open(program.server + "/admin/admin.html?item=clouds")
   .waitForNextPage()
   .then(openCloudProfile)
