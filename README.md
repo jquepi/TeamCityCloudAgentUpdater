@@ -1,7 +1,8 @@
 # TeamCityCloudAgentUpdater
-Simple NodeJS app to update AMI's for TeamCity Cloud Agents
 
-Currently only supports AMI's. Support for Azure VHD's is planned soon.
+Simple NodeJS app to update images for TeamCity Cloud Agents
+
+Currently supports Amazon EC2 and Azure ARM.
 
 At present, the TeamCity API does not support updating Cloud Agents, though there is a [feature request](https://youtrack.jetbrains.com/issue/TW-41139) logged. At present, the [recommended workaround](https://youtrack.jetbrains.com/issue/TW-41139#comment=27-1414938) is by "emulating the HTTP requests sent by the browser on editing the profiles.". This app uses a headless browser (PhantomJS) to login and perform the update.
 
