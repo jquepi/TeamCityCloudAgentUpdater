@@ -8,7 +8,12 @@ At present, the TeamCity API does not support updating Cloud Agents, though ther
 ## Usage
 
 ```
+# AWS
 node index.js --username myusername --password MyPassword --server https://teamcity.example.com --image ami-XXXXXXX --cloudprofile "AWS Agents" --agentprefix "Ubuntu"
+
+# Azure
+node index.js --username myusername --password MyPassword --server https://teamcity.example.com --image "http://.../osdisk.vhd" --cloudprofile "Azure Agents" --agentprefix "Windows2016"
+
 ```
 
 ## License
