@@ -206,6 +206,8 @@ var updateSelectedImage = function() {
         }
       option.prop('selected', true);
       $j('#source-id').change();
+      $j('[id="addImageButton"]').click();
+      $j('[id="createButton"]').click();
     }
     else {
       //azure
@@ -216,6 +218,8 @@ var updateSelectedImage = function() {
       }
       $j('input[name="imageUrl"]').val(image)
       $j('input[name="imageUrl"]').change();
+      $j('div#ArmImageDialog input.submitButton').click();
+      $j('div#newProfileFormDialog input.submitButton').click();
     }
     console.log("TeamCityCloudAgentUpdater: INFO: Updating cloud profile '" + cloudprofile + "' so that agents with prefix '" + agentprefix + "' will use image '" + image + "'");
   }, program.cloudprofile, program.agentprefix, program.image);
@@ -232,11 +236,13 @@ var confirmLoggedIn = function() {
 
 phantom
   .open(program.server + "/login.html")
+  //login
   .type('input[name="username"]', program.username)
   .type('input[name="password"]', program.password)
   .click('input[name="submitLogin"]')
   .waitForNextPage()
   .then(confirmLoggedIn)
+  //navigate to cloud image dialog
   .open(program.server + "/admin/admin.html?item=clouds")
   .waitForNextPage()
   .then(openCloudProfile)
@@ -245,9 +251,6 @@ phantom
   .then(openEditImageDialog)
   //update
   .then(updateSelectedImage)
-  .click('div#ArmImageDialog input.submitButton')
-  .click('div#newProfileFormDialog input.submitButton')
-
   .waitForNextPage()
   //validate
   .open(program.server + "/admin/admin.html?item=clouds")
