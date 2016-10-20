@@ -198,12 +198,12 @@ var updateSelectedImage = function() {
     if ($j('#source-id').length > 0) {
       //aws
       var option = $j('#source-id option[value="' + image + '"]');
-        if (option == null || option.length == 0)
-          throw "TeamCityCloudAgentUpdater: FATAL: Unable to find image '" + image + "'.";
-        if (option.prop('selected')) {
-          console.log("TeamCityCloudAgentUpdater: INFO: Cloud profile is already using correct image. Nothing to do.");
-          return;
-        }
+      if (option == null || option.length == 0)
+        throw "TeamCityCloudAgentUpdater: FATAL: Unable to find image '" + image + "'.";
+      if (option.prop('selected')) {
+        console.log("TeamCityCloudAgentUpdater: INFO: Cloud profile is already using correct image. Nothing to do.");
+        return;
+      }
       option.prop('selected', true);
       $j('#source-id').change();
       $j('[id="addImageButton"]').click();
@@ -223,6 +223,14 @@ var updateSelectedImage = function() {
     }
     console.log("TeamCityCloudAgentUpdater: INFO: Updating cloud profile '" + cloudprofile + "' so that agents with prefix '" + agentprefix + "' will use image '" + image + "'");
   }, program.cloudprofile, program.agentprefix, program.image);
+}
+
+var checkForTerminateInstanceDialog = function() {
+  return phantom.evaluate(function(){
+    if ($j('#RemoveImageDialog').is(":visible")) {
+      $j('#removeImageConfirmButton').click()
+    }
+  });
 }
 
 var confirmLoggedIn = function() {
@@ -251,6 +259,8 @@ phantom
   .then(openEditImageDialog)
   //update
   .then(updateSelectedImage)
+  .waitForNextPage()
+  .then(checkForTerminateInstanceDialog)
   .waitForNextPage()
   //validate
   .open(program.server + "/admin/admin.html?item=clouds")
