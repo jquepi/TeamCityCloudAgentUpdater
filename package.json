@@ -8,14 +8,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/OctopusDeploy/BuildAgentAutomation.git"
+    "url": "git+https://github.com/OctopusDeploy/TeamCityCloudAgentUpdater.git"
   },
   "author": "Matt Richardson",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/OctopusDeploy/BuildAgentAutomation/issues"
+    "url": "https://github.com/OctopusDeploy/TeamCityCloudAgentUpdater/issues"
   },
-  "homepage": "https://github.com/OctopusDeploy/BuildAgentAutomation#readme",
+  "homepage": "https://github.com/OctopusDeploy/TeamCityCloudAgentUpdater#readme",
   "dependencies": {
     "commander": "2.6.0",
     "node-horseman": "2.7.0",
