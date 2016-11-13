@@ -228,6 +228,8 @@ var updateSelectedImage = function() {
 var checkForTerminateInstanceDialog = function() {
   return phantom.evaluate(function(){
     if ($j('#RemoveImageDialog').is(":visible")) {
+      //uncheck the 'terminate instance' checkbox
+      $j('#terminateInstances').prop('checked', false);
       $j('#removeImageConfirmButton').click()
     }
   });
