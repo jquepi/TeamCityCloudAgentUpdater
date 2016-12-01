@@ -3,6 +3,7 @@
 var Horseman = require('node-horseman');
 var program = require('commander');
 var colors = require('colors/safe');
+var http = require('https');
 
 program
   .version('1.0.0')
