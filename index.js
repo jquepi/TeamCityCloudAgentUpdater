@@ -26,8 +26,9 @@ if (!program.image || program.image == "") fail('Option "image" was not supplied
 if (!program.cloudprofile || program.cloudprofile == "") fail('Option "cloudprofile" was not supplied.')
 if (!program.agentprefix || program.agentprefix == "") fail('Option "agentprefix" was not supplied.')
 
+var platform = "";
+var oldImage = "";
 var phantomPath ='./node_modules/phantomjs-prebuilt/lib/phantom/bin/phantomjs'
-
 var isWin = /^win/.test(process.platform);
 if (isWin) {
   phantomPath ='./node_modules/phantomjs-prebuilt/lib/phantom/bin/phantomjs.exe'
@@ -117,7 +118,7 @@ var openEditImageDialog = function () {
         $j($j('table#amazonImagesTable').find('tr')[index + 1]).find('td')[0].click();
         var currentImage = $j('#source-id option:selected').val();
         console.log("TeamCityCloudAgentUpdater: INFO: For cloud profile '" + cloudprofile + "', agents with prefix '" + agentprefix + "' are currently set to use image '" + currentImage + "'");
-        return;
+        return { platform: "amazon", oldImage: currentImage };
       }
       throw "TeamCityCloudAgentUpdater: FATAL: Unable to find amazon cloud image with agent prefix '" + agentprefix + "' in cloud profile '" + cloudprofile + "'";
     }
@@ -135,7 +136,7 @@ var openEditImageDialog = function () {
         $j($j('table.imagesTable').find('tr')[index + 1]).find('td.edit a')[0].click();
         var currentImage = $j('input[name="imageUrl"]').val();
         console.log("TeamCityCloudAgentUpdater: INFO: For cloud profile '" + cloudprofile + "', agents with prefix '" + agentprefix + "' are currently set to use image '" + currentImage + "'");
-        return;
+        return { platform: "azure", oldImage: currentImage };
       }
       throw "TeamCityCloudAgentUpdater: FATAL: Unable to find azure cloud image with agent prefix '" + agentprefix + "' in cloud profile '" + cloudprofile + "'";
     }
@@ -253,6 +254,156 @@ var cleanUp = function() {
   return phantom.close();
 }
 
+function getAuthorisedAgents(callback) {
+  http.get({
+    host: program.server.replace(/https?:\/\//, ''),
+    path: '/httpAuth/app/rest/agents?locator=authorized:true',
+    headers: {
+      'accept': 'application/json',
+      "Authorization" : "Basic " + new Buffer(program.username + ":" + program.password).toString("base64")
+    },
+    agent: false
+  }, function(response) {
+      var body = '';
+      response.on('data', function(d) {
+          body += d;
+      });
+      response.on('end', function() {
+          var parsed = JSON.parse(body);
+          callback(parsed);
+      });
+  }).end();
+}
+
+function getAgentDetails(href, callback) {
+  http.get({
+    host: program.server.replace(/https?:\/\//, ''),
+    path: href,
+    headers: {
+      'accept': 'application/json',
+      "Authorization" : "Basic " + new Buffer(program.username + ":" + program.password).toString("base64")
+    },
+    agent: false
+  }, function(response) {
+      var body = '';
+      response.on('data', function(d) {
+          body += d;
+      });
+      response.on('end', function() {
+          var parsed = JSON.parse(body);
+          callback(parsed);
+      });
+  }).end();
+}
+
+function disableAgent(agent, image) {
+  var req = http.request({
+    host: program.server.replace(/https?:\/\//, ''),
+    path: agent.href + "/enabledInfo",
+    method: 'PUT',
+    headers: {
+      'content-type': 'application/xml',
+      "Authorization" : "Basic " + new Buffer(program.username + ":" + program.password).toString("base64")
+    },
+    agent: false
+  }, function(response) {
+      if (('' + response.statusCode).match(/^2\d\d$/)) {
+          //console.log(colors.cyan("INFO: Server returned status code " + response.statusCode));
+      } else {
+          console.log(colors.red("ERROR: Server returned non-2xx status code " + response.statusCode + ". Exiting with exit code 3."));
+          process.exit(3);
+      }
+      var body = '';
+      response.on('data', function(d) {
+          body += d;
+      });
+      response.on('end', function() {
+        console.log(colors.cyan("INFO: Successfully disabled agent " + agent.id + " from teamcity."));
+      });
+  });
+
+  req.on('error', function (e) {
+    console.log(colors.red("ERROR: " + e));
+    console.log(colors.red("ERROR: Got error when disabling agent. Exiting with exit code 4."));
+    process.exit(4);
+  });
+
+  req.on('timeout', function () {
+    console.log(colors.red("ERROR: timeout"));
+    req.abort();
+  });
+
+  req.write("<enabledInfo status='false'><comment><text>Disabling agent as it uses base image " + image + ", which has been superseded by base image " + program.image + ".</text></comment></enabledInfo>");
+
+  req.end();
+}
+
+function getAgentProperty(agent, propertyName) {
+  var result = null;
+  agent.properties.property.forEach(function(property) {
+      if (property.name == propertyName) {
+        result = property.value;
+      }
+    });
+  return result;
+}
+
+function checkAgentMatches(agent, platform, image, success, failure) {
+    var reportedInstanceName = null;
+    if (agent.properties) {
+      var propertyName;
+      propertyName = 'system.ec2.ami-id';
+
+      var reportedAmiId = getAgentProperty(agent, propertyName);
+    }
+
+    if ((reportedAmiId == image)) {
+      console.log(colors.cyan("INFO: Disabling agent " + agent.id + " as it uses old image " + reportedAmiId));
+      success(agent);
+    }
+    else {
+      failure(agent);
+    }
+}
+
+function disableAgentWith(agents, platform, image) {
+  var failureCount = 0;
+  agents.forEach(function(agent) {
+      getAgentDetails(agent.href, function(agentDetails) {
+        var success = function(agent) {
+            disableAgent(agent, image);
+        };
+        var failure = function (agent) {
+          failureCount++;
+          if (failureCount == agents.length) {
+            console.log(colors.cyan("INFO: No agents with platform = '" + platform + "', image = '" + image + "' found. Nothing to disable."));
+          }
+        };
+
+        checkAgentMatches(agentDetails, platform, image, success, failure);
+      })
+    })
+}
+
+function rememberOldImageDetails(result) {
+  platform = result.platform;
+  oldImage = result.oldImage;
+}
+
+function disableOldAgents() {
+  if (platform != "amazon") {
+    console.log(colors.cyan("WARN: Unable to disable teamcity agents - platform " + platform + " not yet implemented."))
+  }
+  else {
+    console.log(colors.cyan("INFO: Attempting to disable teamcity agents that use image " + oldImage));
+    getAuthorisedAgents(function(response) {
+      var agents = response.agent;
+      //console.log(colors.cyan("INFO: Found " + agents.length + " teamcity agents"));
+      disableAgentWith(agents, platform, oldImage);
+    });
+  }
+}
+
 phantom
   .open(program.server + "/login.html")
   //login
@@ -268,6 +419,8 @@ phantom
   .waitForNextPage()
   .waitFor(cloudDetailsToBeLoaded)
   .then(openEditImageDialog)
+  //save the old image details so we can use it later
+  .then(rememberOldImageDetails)
   //update
   .then(updateSelectedImage)
   .waitForNextPage()
@@ -280,5 +433,7 @@ phantom
   .waitForNextPage()
   .waitFor(cloudDetailsToBeLoaded)
   .then(openEditImageDialogAndValidateSetCorrectly)
+  //disable any agents that use the old image so they dont run any new builds
+  .then(disableOldAgents)
   .catch(handleErrors)
   .finally(cleanUp)
