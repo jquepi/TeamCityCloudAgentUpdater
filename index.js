@@ -245,6 +245,14 @@ var confirmLoggedIn = function() {
   }, program.username);
 }
 
+var handleErrors = function (err) {
+  console.log('TeamCityCloudAgentUpdater: FATAL: ', err);
+}
+
+var cleanUp = function() {
+  return phantom.close();
+}
+
 phantom
   .open(program.server + "/login.html")
   //login
@@ -272,9 +280,5 @@ phantom
   .waitForNextPage()
   .waitFor(cloudDetailsToBeLoaded)
   .then(openEditImageDialogAndValidateSetCorrectly)
-  .catch(function (err) {
-        console.log('TeamCityCloudAgentUpdater: FATAL: ', err);
-    })
-    .finally(function() {
-       return phantom.close();
-    })
+  .catch(handleErrors)
+  .finally(cleanUp)
