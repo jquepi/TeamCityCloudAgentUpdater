@@ -137,7 +137,7 @@ var openEditImageDialog = function () {
         console.log("TeamCityCloudAgentUpdater: INFO: For cloud profile '" + cloudprofile + "', agents with prefix '" + agentprefix + "' are currently set to use image '" + currentImage + "'");
         return;
       }
-      throw "TeamCityCloudAgentUpdater: FATAL: Unable to find amazon cloud image with agent prefix '" + agentprefix + "' in cloud profile '" + cloudprofile + "'";
+      throw "TeamCityCloudAgentUpdater: FATAL: Unable to find azure cloud image with agent prefix '" + agentprefix + "' in cloud profile '" + cloudprofile + "'";
     }
   }, program.cloudprofile, program.agentprefix);
 }
