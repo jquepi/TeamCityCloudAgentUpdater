@@ -16,7 +16,7 @@ program
   .parse(process.argv);
 
 var fail = function(message) {
-  console.log(message);
+  console.log(colors.red("ERROR: " + message));
   process.exit(1);
 };
 if (!program.username || program.username == "") fail('Option "username" was not supplied.')
@@ -59,7 +59,7 @@ var loadPhantomInstance = function () {
 
   phantomInstance.on('consoleMessage', function (msg) {
     if (isOurMessage(msg))
-      console.log(colors.blue(cleanupMessage(msg)));
+      console.log(colors.cyan(cleanupMessage(msg)));
   });
 
   phantomInstance.on('error', function (msg) {
