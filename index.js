@@ -60,7 +60,10 @@ var loadPhantomInstance = function () {
 
   phantomInstance.on('consoleMessage', function (msg) {
     if (isOurMessage(msg))
-      console.log(colors.cyan(cleanupMessage(msg)));
+      if (msg.indexOf("VERBOSE:") > -1)
+        console.log(colors.gray(cleanupMessage(msg)));
+      else
+        console.log(colors.cyan(cleanupMessage(msg)));
   });
 
   phantomInstance.on('error', function (msg) {
@@ -76,6 +79,7 @@ var loadPhantomInstance = function () {
 var phantom = loadPhantomInstance();
 
 var openCloudProfile = function (){
+  console.log(colors.gray("VERBOSE: Opening cloud profile"));
   return phantom.evaluate(function(cloudprofile){
     var link = null;
     $j('div#cloudRefreshableInner table tr').each(function(index, item){
@@ -103,6 +107,7 @@ var openCloudProfile = function (){
 }
 
 var openEditImageDialog = function () {
+  console.log(colors.gray("VERBOSE: Opening edit image dialog"));
   return phantom.evaluate(function(cloudprofile, agentprefix){
     if ($j('#source_images_json').length > 0) {
       //aws
@@ -144,6 +149,7 @@ var openEditImageDialog = function () {
 }
 
 var openEditImageDialogAndValidateSetCorrectly = function () {
+  console.log(colors.gray("VERBOSE: Validating cloud image set correctly"));
   return phantom.evaluate(function(cloudprofile, agentprefix, image){
     if ($j('#source_images_json').length > 0) {
       //aws
@@ -191,25 +197,34 @@ var openEditImageDialogAndValidateSetCorrectly = function () {
 }
 
 var cloudDetailsToBeLoaded = function() {
+  console.log("TeamCityCloudAgentUpdater: VERBOSE: Waiting for cloud details to be loaded");
   return $j('#amazonRefreshableParametersLoadingWrapper').is(":visible") //aws
          || $j('table td.edit a').is(":visible");                        //azure
 }
 
 var updateSelectedImage = function() {
   return phantom.evaluate(function(cloudprofile, agentprefix, image){
+    console.log("TeamCityCloudAgentUpdater: INFO: Updating cloud profile '" + cloudprofile + "' so that agents with prefix '" + agentprefix + "' will use image '" + image + "'");
     if ($j('#source-id').length > 0) {
+      console.log("TeamCityCloudAgentUpdater: VERBOSE: In aws flow");
       //aws
       var option = $j('#source-id option[value="' + image + '"]');
+      console.log("TeamCityCloudAgentUpdater: VERBOSE: Option = " + option);
       if (option == null || option.length == 0)
         throw "TeamCityCloudAgentUpdater: FATAL: Unable to find image '" + image + "'.";
       if (option.prop('selected')) {
         console.log("TeamCityCloudAgentUpdater: INFO: Cloud profile is already using correct image. Nothing to do.");
         return;
       }
+      console.log("TeamCityCloudAgentUpdater: VERBOSE: Setting 'selected' to 'true'");
       option.prop('selected', true);
+      console.log("TeamCityCloudAgentUpdater: VERBOSE: Calling change()");
       $j('#source-id').change();
+      console.log("TeamCityCloudAgentUpdater: VERBOSE: Click addImageButton");
       $j('[id="addImageButton"]').click();
+      console.log("TeamCityCloudAgentUpdater: VERBOSE: Click createButton");
       $j('[id="createButton"]').click();
+      console.log("TeamCityCloudAgentUpdater: VERBOSE: Done");
     }
     else {
       //azure
@@ -223,16 +238,21 @@ var updateSelectedImage = function() {
       $j('div#ArmImageDialog input.submitButton').click();
       $j('div#newProfileFormDialog input.submitButton').click();
     }
-    console.log("TeamCityCloudAgentUpdater: INFO: Updating cloud profile '" + cloudprofile + "' so that agents with prefix '" + agentprefix + "' will use image '" + image + "'");
+    console.log("TeamCityCloudAgentUpdater: INFO: Updated cloud profile '" + cloudprofile + "' so that agents with prefix '" + agentprefix + "' will use image '" + image + "'");
   }, program.cloudprofile, program.agentprefix, program.image);
 }
 
 var checkForTerminateInstanceDialog = function() {
+  console.log(colors.gray("TeamCityCloudAgentUpdater: VERBOSE: Checking for 'Terminate Instance?' dialog"));
   return phantom.evaluate(function(){
     if ($j('#RemoveImageDialog').is(":visible")) {
+      console.log("TeamCityCloudAgentUpdater: VERBOSE: 'Terminate Instance?' has displayed, unticking terminate checkbox and submitting");
       //uncheck the 'terminate instance' checkbox
       $j('#terminateInstances').prop('checked', false);
       $j('#removeImageConfirmButton').click()
+    }
+    else {
+      console.log("TeamCityCloudAgentUpdater: VERBOSE: 'Terminate Instance?' did not display");
     }
   });
 }
@@ -251,6 +271,7 @@ var handleErrors = function (err) {
 }
 
 var cleanUp = function() {
+  console.log(colors.gray("VERBOSE: Cleaning up"));
   return phantom.close();
 }
 
@@ -372,6 +393,7 @@ function disableAgentWith(agents, platform, image) {
       getAgentDetails(agent.href, function(agentDetails) {
         var success = function(agent) {
             disableAgent(agent, image);
+          console.log(colors.cyan("INFO: Disabling agent " + agent.id + " as it uses old image " + image));
         };
         var failure = function (agent) {
           failureCount++;
@@ -391,6 +413,7 @@ function rememberOldImageDetails(result) {
 }
 
 function disableOldAgents() {
+  console.log(colors.gray("VERBOSE: Disabling old agents"));
   if (platform != "amazon") {
     console.log(colors.cyan("WARN: Unable to disable teamcity agents - platform " + platform + " not yet implemented."))
   }
@@ -398,7 +421,6 @@ function disableOldAgents() {
     console.log(colors.cyan("INFO: Attempting to disable teamcity agents that use image " + oldImage));
     getAuthorisedAgents(function(response) {
       var agents = response.agent;
-      //console.log(colors.cyan("INFO: Found " + agents.length + " teamcity agents"));
       disableAgentWith(agents, platform, oldImage);
     });
   }
