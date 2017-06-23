@@ -85,17 +85,11 @@ var openCloudProfile = function (){
     $j('div#cloudRefreshableInner table tr').each(function(index, item){
       var firstTableCell = item.children[0]
       if (firstTableCell.tagName == 'TD') {
-        var result = $j(firstTableCell)
-          .clone()    //clone the element
-          .children() //select all the children
-          .remove()   //remove all the children
-          .end()      //again go back to selected element
-          .text()
-          .trim();
-          if (result == cloudprofile) {
-            link = firstTableCell;
-            return;
-          }
+        var result = firstTableCell.children[1].text;
+        if (result == cloudprofile) {
+          link = firstTableCell.children[0];
+          return;
+        }
       }
     });
     if (link) {
@@ -110,6 +104,7 @@ var openEditImageDialog = function () {
   console.log(colors.gray("VERBOSE: Opening edit image dialog"));
   return phantom.evaluate(function(cloudprofile, agentprefix){
     if ($j('#source_images_json').length > 0) {
+      console.log("TeamCityCloudAgentUpdater: VERBOSE: looks like we're using AWS");
       //aws
       var json = $j('#source_images_json').attr('value');
       var images = JSON.parse(json);
@@ -118,6 +113,7 @@ var openEditImageDialog = function () {
       $(images).each(function(elem, i){
         if (elem['image-name-prefix'] == agentprefix) { index = i; }
       });
+      console.log("TeamCityCloudAgentUpdater: VERBOSE: found cloud profile '" + cloudprofile + "' at index " + index);
 
       if (index > -1) {
         $j($j('table#amazonImagesTable').find('tr')[index + 1]).find('td')[0].click();
@@ -128,6 +124,7 @@ var openEditImageDialog = function () {
       throw "TeamCityCloudAgentUpdater: FATAL: Unable to find amazon cloud image with agent prefix '" + agentprefix + "' in cloud profile '" + cloudprofile + "'";
     }
     else {
+      console.log("TeamCityCloudAgentUpdater: VERBOSE: looks like we're using Azure");
       //azure
       var json = $j('[name="prop:images_data"]').attr('value');
       var images = JSON.parse(json);
@@ -197,7 +194,6 @@ var openEditImageDialogAndValidateSetCorrectly = function () {
 }
 
 var cloudDetailsToBeLoaded = function() {
-  console.log("TeamCityCloudAgentUpdater: VERBOSE: Waiting for cloud details to be loaded");
   return $j('#amazonRefreshableParametersLoadingWrapper').is(":visible") //aws
          || $j('table td.edit a').is(":visible");                        //azure
 }
@@ -408,6 +404,7 @@ function disableAgentWith(agents, platform, image) {
 }
 
 function rememberOldImageDetails(result) {
+  console.log(colors.gray("VERBOSE: rememberOldImageDetails: " + JSON.stringify(result)))
   platform = result.platform;
   oldImage = result.oldImage;
 }
@@ -428,33 +425,46 @@ function disableOldAgents() {
 
 phantom
   .open(program.server + "/login.html")
+  .screenshot('01-loginpageloaded.png')
   //login
   .type('input[name="username"]', program.username)
   .type('input[name="password"]', program.password)
   .click('input[name="submitLogin"]')
   .waitForNextPage()
+  .screenshot('02-loggedin.png')
   .then(confirmLoggedIn)
   //navigate to cloud image dialog
-  .open(program.server + "/admin/admin.html?item=clouds")
+  .open(program.server + "/admin/editProject.html?projectId=_Root&tab=clouds")
   .waitForNextPage()
+  .screenshot('03-cloudagents.png')
   .then(openCloudProfile)
   .waitForNextPage()
+  .screenshot('04-cloudprofilesloaded.png')
   .waitFor(cloudDetailsToBeLoaded)
+  .screenshot('05-clouddetailsloaded.png')
   .then(openEditImageDialog)
   //save the old image details so we can use it later
   .then(rememberOldImageDetails)
+  .screenshot('06-editimagedialog.png')
   //update
   .then(updateSelectedImage)
   .waitForNextPage()
+  .screenshot('07-updatedimage.png')
   .then(checkForTerminateInstanceDialog)
+  .screenshot('08-checkedforterminateinstancedialog.png')
   .waitForNextPage()
+  .screenshot('09-afterupdate.png')
   //validate
-  .open(program.server + "/admin/admin.html?item=clouds")
+  .open(program.server + "/admin/editProject.html?projectId=_Root&tab=clouds")
   .waitForNextPage()
+  .screenshot('10-cloudagents.png')
   .then(openCloudProfile)
   .waitForNextPage()
+  .screenshot('11-cloudprofiles.png')
   .waitFor(cloudDetailsToBeLoaded)
+  .screenshot('12-cloudprofilesloaded.png')
   .then(openEditImageDialogAndValidateSetCorrectly)
+  .screenshot('13-editimagedialog.png')
   //disable any agents that use the old image so they dont run any new builds
   .then(disableOldAgents)
   .catch(handleErrors)
