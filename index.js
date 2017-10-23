@@ -1,6 +1,5 @@
 'use strict';
 
-var Horseman = require('node-horseman');
 var program = require('commander');
 var colors = require('colors/safe');
 var http = require('https');
@@ -26,250 +25,7 @@ if (!program.image || program.image == "") fail('Option "image" was not supplied
 if (!program.cloudprofile || program.cloudprofile == "") fail('Option "cloudprofile" was not supplied.')
 if (!program.agentprefix || program.agentprefix == "") fail('Option "agentprefix" was not supplied.')
 
-var platform = "";
-var oldImage = "";
-var phantomPath ='./node_modules/phantomjs-prebuilt/lib/phantom/bin/phantomjs'
-var isWin = /^win/.test(process.platform);
-if (isWin) {
-  phantomPath ='./node_modules/phantomjs-prebuilt/lib/phantom/bin/phantomjs.exe'
-}
-
-var loadPhantomInstance = function () {
-
-  var options = {
-    phantomPath: phantomPath,
-    loadImages: true,
-    injectJquery: true,
-    webSecurity: true,
-    ignoreSSLErrors: false,
-    debugPort: 9000,
-    timeout: 10000
-  };
-
-  var phantomInstance = new Horseman(options);
-
-  function isOurMessage(msg) {
-    return msg.toString().indexOf('TeamCityCloudAgentUpdater') > -1;
-  }
-
-  function cleanupMessage(msg) {
-    return msg.toString()
-              .replace('TeamCityCloudAgentUpdater: ', '')
-              .replace('[object Object],[object Object]', '');
-  }
-
-  phantomInstance.on('consoleMessage', function (msg) {
-    if (isOurMessage(msg))
-      if (msg.indexOf("VERBOSE:") > -1)
-        console.log(colors.gray(cleanupMessage(msg)));
-      else
-        console.log(colors.cyan(cleanupMessage(msg)));
-  });
-
-  phantomInstance.on('error', function (msg) {
-    if (isOurMessage(msg))
-      console.error(colors.red(cleanupMessage(msg)));
-      if (msg.toString().indexOf("FATAL:") > -1)
-          process.exit(1);
-  });
-
-  return phantomInstance;
-};
-
-var phantom = loadPhantomInstance();
-
-var openCloudProfile = function (){
-  console.log(colors.gray("VERBOSE: Opening cloud profile"));
-  return phantom.evaluate(function(cloudprofile){
-    var link = null;
-    $j('div#cloudRefreshableInner table tr').each(function(index, item){
-      var firstTableCell = item.children[0]
-      if (firstTableCell.tagName == 'TD') {
-        var result = firstTableCell.children[1].text;
-        if (result == cloudprofile) {
-          link = firstTableCell.children[0];
-          return;
-        }
-      }
-    });
-    if (link) {
-      $j(link).click();
-      return;
-    }
-    throw "TeamCityCloudAgentUpdater: FATAL: Unable to find cloud profile '" + cloudprofile + "'";
-  }, program.cloudprofile);
-}
-
-var openEditImageDialog = function () {
-  console.log(colors.gray("VERBOSE: Opening edit image dialog"));
-  return phantom.evaluate(function(cloudprofile, agentprefix){
-    if ($j('#source_images_json').length > 0) {
-      console.log("TeamCityCloudAgentUpdater: VERBOSE: looks like we're using AWS");
-      //aws
-      var json = $j('#source_images_json').attr('value');
-      var images = JSON.parse(json);
-
-      var index = -1;
-      $(images).each(function(elem, i){
-        if (elem['image-name-prefix'] == agentprefix) { index = i; }
-      });
-      console.log("TeamCityCloudAgentUpdater: VERBOSE: found cloud profile '" + cloudprofile + "' at index " + index);
-
-      if (index > -1) {
-        $j($j('table#amazonImagesTable').find('tr')[index + 1]).find('td')[0].click();
-        var currentImage = $j('#source-id option:selected').val();
-        console.log("TeamCityCloudAgentUpdater: INFO: For cloud profile '" + cloudprofile + "', agents with prefix '" + agentprefix + "' are currently set to use image '" + currentImage + "'");
-        return { platform: "amazon", oldImage: currentImage };
-      }
-      throw "TeamCityCloudAgentUpdater: FATAL: Unable to find amazon cloud image with agent prefix '" + agentprefix + "' in cloud profile '" + cloudprofile + "'";
-    }
-    else {
-      console.log("TeamCityCloudAgentUpdater: VERBOSE: looks like we're using Azure");
-      //azure
-      var json = $j('[name="prop:images_data"]').attr('value');
-      var images = JSON.parse(json);
-
-      var index = -1;
-      $(images).each(function(elem, i){
-        if (elem.vmNamePrefix == agentprefix) { index = i; }
-      });
-
-      if (index > -1) {
-        $j($j('table.imagesTable').find('tr')[index + 1]).find('td.edit a')[0].click();
-        var currentImage = $j('input[name="imageUrl"]').val();
-        console.log("TeamCityCloudAgentUpdater: INFO: For cloud profile '" + cloudprofile + "', agents with prefix '" + agentprefix + "' are currently set to use image '" + currentImage + "'");
-        return { platform: "azure", oldImage: currentImage };
-      }
-      throw "TeamCityCloudAgentUpdater: FATAL: Unable to find azure cloud image with agent prefix '" + agentprefix + "' in cloud profile '" + cloudprofile + "'";
-    }
-  }, program.cloudprofile, program.agentprefix);
-}
-
-var openEditImageDialogAndValidateSetCorrectly = function () {
-  console.log(colors.gray("VERBOSE: Validating cloud image set correctly"));
-  return phantom.evaluate(function(cloudprofile, agentprefix, image){
-    if ($j('#source_images_json').length > 0) {
-      //aws
-      var json = $j('#source_images_json').attr('value');
-      var images = JSON.parse(json);
-
-      var index = -1;
-      $(images).each(function(elem, i){
-        if (elem['image-name-prefix'] == agentprefix) { index = i; }
-      });
-
-      if (index > -1) {
-        $j($j('table#amazonImagesTable').find('tr')[index + 1]).find('td')[0].click();
-        var currentImage = $j('#source-id option:selected').val();
-        if (currentImage == image)
-          console.log("TeamCityCloudAgentUpdater: INFO: Successfully updated cloud profile '" + cloudprofile + "'.");
-        else
-          throw "TeamCityCloudAgentUpdater: FATAL: Failed to update cloud image.";
-        return;
-      }
-    }
-    else {
-      //azure
-      var json = $j('[name="prop:images_data"]').attr('value');
-      var images = JSON.parse(json);
-
-      var index = -1;
-      $(images).each(function(elem, i){
-        if (elem.vmNamePrefix == agentprefix) { index = i; }
-      });
-
-      if (index > -1) {
-        $j($j('table.imagesTable').find('tr')[index + 1]).find('td.edit a')[0].click();
-        var currentImage = $j('input[name="imageUrl"]').val();
-        if (currentImage == image)
-          console.log("TeamCityCloudAgentUpdater: INFO: Successfully updated cloud profile '" + cloudprofile + "'.");
-        else
-          throw "TeamCityCloudAgentUpdater: FATAL: Failed to update cloud image.";
-        return;
-      }
-    }
-    throw "TeamCityCloudAgentUpdater: FATAL: Unable to find cloud image with agent prefix '" + agentprefix + "'";
-
-  }, program.cloudprofile, program.agentprefix, program.image);
-}
-
-var cloudDetailsToBeLoaded = function() {
-  return $j('#amazonRefreshableParametersLoadingWrapper').is(":visible") //aws
-         || $j('table td.edit a').is(":visible");                        //azure
-}
-
-var updateSelectedImage = function() {
-  return phantom.evaluate(function(cloudprofile, agentprefix, image){
-    console.log("TeamCityCloudAgentUpdater: INFO: Updating cloud profile '" + cloudprofile + "' so that agents with prefix '" + agentprefix + "' will use image '" + image + "'");
-    if ($j('#source-id').length > 0) {
-      console.log("TeamCityCloudAgentUpdater: VERBOSE: In aws flow");
-      //aws
-      var option = $j('#source-id option[value="' + image + '"]');
-      console.log("TeamCityCloudAgentUpdater: VERBOSE: Option = " + option);
-      if (option == null || option.length == 0)
-        throw "TeamCityCloudAgentUpdater: FATAL: Unable to find image '" + image + "'.";
-      if (option.prop('selected')) {
-        console.log("TeamCityCloudAgentUpdater: INFO: Cloud profile is already using correct image. Nothing to do.");
-        return;
-      }
-      console.log("TeamCityCloudAgentUpdater: VERBOSE: Setting 'selected' to 'true'");
-      option.prop('selected', true);
-      console.log("TeamCityCloudAgentUpdater: VERBOSE: Calling change()");
-      $j('#source-id').change();
-      console.log("TeamCityCloudAgentUpdater: VERBOSE: Click addImageButton");
-      $j('[id="addImageButton"]').click();
-      console.log("TeamCityCloudAgentUpdater: VERBOSE: Click createButton");
-      $j('[id="createButton"]').click();
-      console.log("TeamCityCloudAgentUpdater: VERBOSE: Done");
-    }
-    else {
-      //azure
-      var currentImage = $j('input[name="imageUrl"]').val();
-      if (currentImage == image) {
-        console.log("TeamCityCloudAgentUpdater: INFO: Cloud profile is already using correct image. Nothing to do.");
-        return;
-      }
-      $j('input[name="imageUrl"]').val(image)
-      $j('input[name="imageUrl"]').change();
-      $j('div#ArmImageDialog input.submitButton').click();
-      $j('div#newProfileFormDialog input.submitButton').click();
-    }
-    console.log("TeamCityCloudAgentUpdater: INFO: Updated cloud profile '" + cloudprofile + "' so that agents with prefix '" + agentprefix + "' will use image '" + image + "'");
-  }, program.cloudprofile, program.agentprefix, program.image);
-}
-
-var checkForTerminateInstanceDialog = function() {
-  console.log(colors.gray("TeamCityCloudAgentUpdater: VERBOSE: Checking for 'Terminate Instance?' dialog"));
-  return phantom.evaluate(function(){
-    if ($j('#RemoveImageDialog').is(":visible")) {
-      console.log("TeamCityCloudAgentUpdater: VERBOSE: 'Terminate Instance?' has displayed, unticking terminate checkbox and submitting");
-      //uncheck the 'terminate instance' checkbox
-      $j('#terminateInstances').prop('checked', false);
-      $j('#removeImageConfirmButton').click()
-    }
-    else {
-      console.log("TeamCityCloudAgentUpdater: VERBOSE: 'Terminate Instance?' did not display");
-    }
-  });
-}
-
-var confirmLoggedIn = function() {
-  return phantom.evaluate(function(username) {
-    if ($j('input[name="submitLogin"]').length > 0)
-      throw "TeamCityCloudAgentUpdater: FATAL: Unable to login with username '" + username + "'.";
-    else
-      console.log("TeamCityCloudAgentUpdater: INFO: Successfully logged with username '" + username + "'.");
-  }, program.username);
-}
-
-var handleErrors = function (err) {
-  console.log('TeamCityCloudAgentUpdater: FATAL: ', err);
-}
-
-var cleanUp = function() {
-  console.log(colors.gray("VERBOSE: Cleaning up"));
-  return phantom.close();
-}
+var auth = "Basic " + new Buffer(program.username + ":" + program.password).toString("base64");
 
 function getAuthorisedAgents(callback) {
   http.get({
@@ -277,7 +33,7 @@ function getAuthorisedAgents(callback) {
     path: '/httpAuth/app/rest/agents?locator=authorized:true',
     headers: {
       'accept': 'application/json',
-      "Authorization" : "Basic " + new Buffer(program.username + ":" + program.password).toString("base64")
+      "Authorization" : auth
     },
     agent: false
   }, function(response) {
@@ -298,7 +54,7 @@ function getAgentDetails(href, callback) {
     path: href,
     headers: {
       'accept': 'application/json',
-      "Authorization" : "Basic " + new Buffer(program.username + ":" + program.password).toString("base64")
+      "Authorization" : auth
     },
     agent: false
   }, function(response) {
@@ -320,15 +76,15 @@ function disableAgent(agent, image) {
     method: 'PUT',
     headers: {
       'content-type': 'application/xml',
-      "Authorization" : "Basic " + new Buffer(program.username + ":" + program.password).toString("base64")
+      "Authorization" : auth
     },
     agent: false
   }, function(response) {
       if (('' + response.statusCode).match(/^2\d\d$/)) {
-          //console.log(colors.cyan("INFO: Server returned status code " + response.statusCode));
+          console.log(colors.gray("VERBOSE: Server returned status code " + response.statusCode));
       } else {
-          console.log(colors.red("ERROR: Server returned non-2xx status code " + response.statusCode + ". Exiting with exit code 3."));
-          process.exit(3);
+          console.log(colors.red("ERROR: Server returned non-2xx status code " + response.statusCode + ". Exiting with exit code 2."));
+          process.exit(2);
       }
       var body = '';
       response.on('data', function(d) {
@@ -336,13 +92,14 @@ function disableAgent(agent, image) {
       });
       response.on('end', function() {
         console.log(colors.cyan("INFO: Successfully disabled agent " + agent.id + " from teamcity."));
+        console.log(colors.gray("VERBOSE: " + body));
       });
   });
 
   req.on('error', function (e) {
     console.log(colors.red("ERROR: " + e));
-    console.log(colors.red("ERROR: Got error when disabling agent. Exiting with exit code 4."));
-    process.exit(4);
+    console.log(colors.red("ERROR: Got error when disabling agent. Exiting with exit code 3."));
+    process.exit(3);
   });
 
   req.on('timeout', function () {
@@ -365,8 +122,7 @@ function getAgentProperty(agent, propertyName) {
   return result;
 }
 
-function checkAgentMatches(agent, platform, image, success, failure) {
-    var reportedInstanceName = null;
+function checkAgentMatches(agent, image, success, failure) {
     if (agent.properties) {
       var propertyName;
       propertyName = 'system.ec2.ami-id';
@@ -383,89 +139,172 @@ function checkAgentMatches(agent, platform, image, success, failure) {
     }
 }
 
-function disableAgentWith(agents, platform, image) {
+function disableAgentWith(agents, image) {
   var failureCount = 0;
   agents.forEach(function(agent) {
       getAgentDetails(agent.href, function(agentDetails) {
         var success = function(agent) {
             disableAgent(agent, image);
-          console.log(colors.cyan("INFO: Disabling agent " + agent.id + " as it uses old image " + image));
         };
-        var failure = function (agent) {
+        var failure = function () {
           failureCount++;
           if (failureCount == agents.length) {
-            console.log(colors.cyan("INFO: No agents with platform = '" + platform + "', image = '" + image + "' found. Nothing to disable."));
+            console.log(colors.cyan("INFO: No agents with image = '" + image + "' found. Nothing to disable."));
           }
         };
 
-        checkAgentMatches(agentDetails, platform, image, success, failure);
+        checkAgentMatches(agentDetails, image, success, failure);
       })
     })
 }
 
-function rememberOldImageDetails(result) {
-  console.log(colors.gray("VERBOSE: rememberOldImageDetails: " + JSON.stringify(result)))
-  platform = result.platform;
-  oldImage = result.oldImage;
+function disableOldAgents(oldImage) {
+  console.log(colors.cyan("INFO: Attempting to disable teamcity agents that use image " + oldImage));
+  getAuthorisedAgents(function(response) {
+    var agents = response.agent;
+    disableAgentWith(agents, oldImage);
+  });
 }
 
-function disableOldAgents() {
-  console.log(colors.gray("VERBOSE: Disabling old agents"));
-  if (platform != "amazon") {
-    console.log(colors.cyan("WARN: Unable to disable teamcity agents - platform " + platform + " not yet implemented."))
-  }
-  else {
-    console.log(colors.cyan("INFO: Attempting to disable teamcity agents that use image " + oldImage));
-    getAuthorisedAgents(function(response) {
-      var agents = response.agent;
-      disableAgentWith(agents, platform, oldImage);
+var getRootProjectFeatures = function(callback) {
+  http.get({
+    host: program.server,
+    path: '/httpAuth/app/rest/projects/id:_Root/projectFeatures',
+    headers: {
+      'accept': 'application/json',
+      "Authorization" : auth
+    }
+  }, function(response) {
+      if (('' + response.statusCode).match(/^2\d\d$/)) {
+          console.log(colors.gray("VERBOSE: Server returned status code " + response.statusCode));
+      } else {
+          console.log(colors.red("ERROR: Server returned non-2xx status code " + response.statusCode + ". Exiting with exit code 4."));
+          process.exit(4);
+      }
+      var body = '';
+      response.on('data', function(d) {
+          body += d;
+      });
+      response.on('end', function() {
+          var parsed = JSON.parse(body);
+          callback(parsed);
+      });
+  }).end();
+}
+
+function getFeatureProperty(feature, propertyName) {
+  var result = null;
+  feature.properties.property.forEach(function(property) {
+    if (property.name == propertyName) {
+      result = property.value;
+    }
+  });
+  if (result)
+    return result;
+  console.log(colors.red("ERROR: Unable to find property '" + propertyName + "' on '" + JSON.stringify(feature) + "'. Exiting with code 5."));
+  process.exit(5);
+}
+
+function setFeatureProperty(feature, propertyName, newValue) {
+  feature.properties.property.forEach(function(property) {
+    if (property.name == propertyName) {
+      property.value = newValue;
+      return;
+    }
+  });
+}
+
+var getCloudProfile = function(response) {
+  var features = response.projectFeature;
+  var returnFeature;
+  features.forEach(function(feature) {
+    if (feature.type === 'CloudProfile') {
+      if (getFeatureProperty(feature, 'name') == program.cloudprofile) {
+        returnFeature = feature;
+      }
+    }
+  });
+  if (returnFeature)
+    return returnFeature;
+  console.log(colors.red("ERROR: Unable to find Cloud Profile '" + program.cloudprofile + "'. Exiting with code 6."));
+  process.exit(6);
+}
+
+var getCloudImage = function(cloudProfile, response) {
+  var cloudProfileId = cloudProfile.id;
+  var features = response.projectFeature;
+  var returnFeature;
+  features.forEach(function(feature) {
+    if (feature.type === 'CloudImage') {
+      if (getFeatureProperty(feature, 'profileId') === cloudProfileId) {
+        if (getFeatureProperty(feature, 'image-name-prefix') === program.agentprefix) {
+          returnFeature = feature;
+        }
+      }
+    }
+  });
+  if (returnFeature)
+    return returnFeature;
+  console.log(colors.red("ERROR: Unable to find Cloud Image with profileid '" + cloudProfileId + "' and image-name-prefix '" + program.agentprefix + "'.  Exiting with code 7."));
+  process.exit(7);
+}
+
+function updateCloudImage(cloudImage, callback) {
+  var req = http.request({
+    host: 'build.octopushq.com',
+    path: cloudImage.href,
+    method: 'PUT',
+    headers: {
+      'accept': 'application/json',
+      'Authorization': auth,
+      'content-type': 'application/json'
+    }
+  }, function(response) {
+      if (('' + response.statusCode).match(/^2\d\d$/)) {
+          console.log(colors.gray("VERBOSE: Server returned status code " + response.statusCode));
+      } else {
+          console.log(colors.red("ERROR: Server returned non-2xx status code " + response.statusCode + ". Exiting with exit code 8."));
+          process.exit(8);
+      }
+      var body = '';
+      response.on('data', function(d) {
+          body += d;
+      });
+      response.on('end', function() {
+        console.log(colors.cyan("INFO: Successfully updated cloudImage " + cloudImage.id + " in teamcity."));
+        console.log(colors.gray("VERBOSE" + body));
+        callback();
+      });
+  });
+
+  req.on('error', function (e) {
+    console.log(colors.red(e));
+    console.log(colors.red("ERROR: Got error when updating cloudImage. Exiting with exit code 9."));
+    process.exit(9);
+  });
+
+  req.on('timeout', function () {
+    req.abort();
+    console.log(colors.red("ERROR: Got timeout when updating cloudImage. Exiting with exit code 10."));
+    process.exit(10);
+  });
+
+  req.write(JSON.stringify(cloudImage));
+
+  req.end();
+}
+
+getRootProjectFeatures(function (features) {
+  var cloudProfile = getCloudProfile(features);
+  var cloudImage = getCloudImage(cloudProfile, features);
+  var ami = getFeatureProperty(cloudImage, 'source-id');
+  if (ami == program.image) {
+    console.log(colors.cyan("INFO: TeamCity cloud profile '" + program.cloudprofile + "', image '" + program.agentprefix + "' is already set to use '" + program.image + "'"));
+  } else {
+    console.log(colors.cyan("INFO: TeamCity cloud profile '" + program.cloudprofile + "', image '" + program.agentprefix + "' is currently set to use '" + ami + "'. Updating to use '" + program.image + "'."));
+    setFeatureProperty(cloudImage, 'source-id', program.image);
+    updateCloudImage(cloudImage, function() {
+      disableOldAgents(ami);
     });
   }
-}
-
-phantom
-  .open(program.server + "/login.html")
-  .screenshot('01-loginpageloaded.png')
-  //login
-  .type('input[name="username"]', program.username)
-  .type('input[name="password"]', program.password)
-  .click('input[name="submitLogin"]')
-  .waitForNextPage()
-  .screenshot('02-loggedin.png')
-  .then(confirmLoggedIn)
-  //navigate to cloud image dialog
-  .open(program.server + "/admin/editProject.html?projectId=_Root&tab=clouds")
-  .waitForNextPage()
-  .screenshot('03-cloudagents.png')
-  .then(openCloudProfile)
-  .waitForNextPage()
-  .screenshot('04-cloudprofilesloaded.png')
-  .waitFor(cloudDetailsToBeLoaded)
-  .screenshot('05-clouddetailsloaded.png')
-  .then(openEditImageDialog)
-  //save the old image details so we can use it later
-  .then(rememberOldImageDetails)
-  .screenshot('06-editimagedialog.png')
-  //update
-  .then(updateSelectedImage)
-  .waitForNextPage()
-  .screenshot('07-updatedimage.png')
-  .then(checkForTerminateInstanceDialog)
-  .screenshot('08-checkedforterminateinstancedialog.png')
-  .waitForNextPage()
-  .screenshot('09-afterupdate.png')
-  //validate
-  .open(program.server + "/admin/editProject.html?projectId=_Root&tab=clouds")
-  .waitForNextPage()
-  .screenshot('10-cloudagents.png')
-  .then(openCloudProfile)
-  .waitForNextPage()
-  .screenshot('11-cloudprofiles.png')
-  .waitFor(cloudDetailsToBeLoaded)
-  .screenshot('12-cloudprofilesloaded.png')
-  .then(openEditImageDialogAndValidateSetCorrectly)
-  .screenshot('13-editimagedialog.png')
-  //disable any agents that use the old image so they dont run any new builds
-  .then(disableOldAgents)
-  .catch(handleErrors)
-  .finally(cleanUp)
+});

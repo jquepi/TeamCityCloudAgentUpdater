@@ -1,7 +1,7 @@
 {
   "name": "teamcity-cloud-agent-updater",
   "version": "1.0.0",
-  "description": "Updates AMI & VHD references in TeamCity Cloud Agents",
+  "description": "Updates image references in TeamCity Cloud Agents",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -11,15 +11,13 @@
     "url": "git+https://github.com/OctopusDeploy/TeamCityCloudAgentUpdater.git"
   },
   "author": "Matt Richardson",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/OctopusDeploy/TeamCityCloudAgentUpdater/issues"
   },
   "homepage": "https://github.com/OctopusDeploy/TeamCityCloudAgentUpdater#readme",
   "dependencies": {
-    "commander": "2.6.0",
-    "node-horseman": "2.7.0",
     "colors": "1.1.2",
-    "phantomjs-prebuilt": "2.1.12"
+    "commander": "2.6.0"
   }
 }
