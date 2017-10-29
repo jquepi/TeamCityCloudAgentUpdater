@@ -168,7 +168,7 @@ function disableOldAgents(oldImage) {
 
 var getRootProjectFeatures = function(callback) {
   http.get({
-    host: program.server,
+    host: program.server.replace(/https?:\/\//, ''),
     path: '/httpAuth/app/rest/projects/id:_Root/projectFeatures',
     headers: {
       'accept': 'application/json',
