@@ -251,7 +251,7 @@ var getCloudImage = function(cloudProfile, response) {
 
 function updateCloudImage(cloudImage, callback) {
   var req = http.request({
-    host: 'build.octopushq.com',
+    host: program.server.replace(/https?:\/\//, ''),
     path: cloudImage.href,
     method: 'PUT',
     headers: {
