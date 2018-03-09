@@ -45,7 +45,7 @@ npm install
 Write-output "### Enabling TLS 1.2 support"
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12, [System.Net.SecurityProtocolType]::Tls11, [System.Net.SecurityProtocolType]::Tls
 
-Compress-Archive -Path . -DestinationPath ".\TeamCityCloudAgentUpdater.$buildVersion.zip"
+Compress-Archive -Path (get-childitem) -DestinationPath ".\TeamCityCloudAgentUpdater.$buildVersion.zip"
 
 $commitId = git rev-parse HEAD
 Publish-ToGitHub -versionNumber $buildVersion `
