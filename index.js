@@ -25,7 +25,7 @@ if (!program.image || program.image == "") fail('Option "image" was not supplied
 if (!program.cloudprofile || program.cloudprofile == "") fail('Option "cloudprofile" was not supplied.')
 if (!program.agentprefix || program.agentprefix == "") fail('Option "agentprefix" was not supplied.')
 
-var auth = "Basic " + new Buffer(program.username + ":" + program.password).toString("base64");
+var auth = "Basic " + Buffer.from(program.username + ":" + program.password).toString("base64");
 
 function getAuthorisedAgents(callback) {
   http.get({
