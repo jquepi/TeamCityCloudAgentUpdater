@@ -297,12 +297,12 @@ function updateCloudImage(cloudImage, callback) {
 getRootProjectFeatures(function (features) {
   var cloudProfile = getCloudProfile(features);
   var cloudImage = getCloudImage(cloudProfile, features);
-  var ami = getFeatureProperty(cloudImage, 'source-id');
+  var ami = getFeatureProperty(cloudImage, 'amazon-id');
   if (ami == program.image) {
     console.log(colors.cyan("INFO: TeamCity cloud profile '" + program.cloudprofile + "', image '" + program.agentprefix + "' is already set to use '" + program.image + "'"));
   } else {
     console.log(colors.cyan("INFO: TeamCity cloud profile '" + program.cloudprofile + "', image '" + program.agentprefix + "' is currently set to use '" + ami + "'. Updating to use '" + program.image + "'."));
-    setFeatureProperty(cloudImage, 'source-id', program.image);
+    setFeatureProperty(cloudImage, 'amazon-id', program.image);
     updateCloudImage(cloudImage, function() {
       disableOldAgents(ami);
     });
