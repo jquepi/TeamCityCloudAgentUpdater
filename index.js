@@ -8,7 +8,7 @@ program
   .version('1.0.0')
   .option('--token <string>', 'A valid TeamCity user access token (requires TC 2019.1)')
   .option('--server <string>', 'The url of the TeamCity server, eg "http://teamcity.example.com"')
-  .option('--image <string>', 'The AMI id (for AWS), or full url to the VHD (for Azure)')
+  .option('--image <string>', 'The AMI id (for AWS), or full url to the VHD / resource id of the managed image (for Azure)')
   .option('--cloudprofile <string>', 'The name of the TeamCity Cloud Profile to modify')
   .option('--agentprefix <string>', 'The agent prefix used in the Cloud Profile image that should be updated')
   .parse(process.argv);
@@ -106,6 +106,7 @@ function disableAgent(agent, image) {
     req.abort();
   });
 
+   //todo: needs shortening in the case of azure
   req.write("<enabledInfo status='false'><comment><text>Disabling agent as it uses base image " + image + ", which has been superseded by base image " + program.image + ".</text></comment></enabledInfo>");
 
   req.end();
@@ -124,13 +125,13 @@ function getAgentProperty(agent, propertyName) {
 function checkAgentMatches(agent, image, success, failure) {
     if (agent.properties) {
       var propertyName;
-      propertyName = 'system.ec2.ami-id';
+      propertyName = 'system.ec2.ami-id'; //todo: needs fixing to work for azure as well
 
-      var reportedAmiId = getAgentProperty(agent, propertyName);
+      var reportedImageId = getAgentProperty(agent, propertyName);
     }
 
-    if ((reportedAmiId == image)) {
-      console.log(colors.cyan("INFO: Disabling agent " + agent.id + " as it uses old image " + reportedAmiId));
+    if ((reportedImageId == image)) {
+      console.log(colors.cyan("INFO: Disabling agent " + agent.id + " as it uses old image " + reportedImageId));
       success(agent);
     }
     else {
@@ -233,10 +234,11 @@ var getCloudImage = function(cloudProfile, response) {
   var cloudProfileId = cloudProfile.id;
   var features = response.projectFeature;
   var returnFeature;
+  var agentPrefixProperty = getFeatureProperty(cloudProfile, 'cloud-code') == 'amazon' ? 'image-name-prefix' : 'source-id';
   features.forEach(function(feature) {
     if (feature.type === 'CloudImage') {
       if (getFeatureProperty(feature, 'profileId') === cloudProfileId) {
-        if (getFeatureProperty(feature, 'image-name-prefix') === program.agentprefix) {
+        if (getFeatureProperty(feature, agentPrefixProperty) === program.agentprefix) {
           returnFeature = feature;
         }
       }
@@ -244,13 +246,16 @@ var getCloudImage = function(cloudProfile, response) {
   });
   if (returnFeature)
     return returnFeature;
-  console.log(colors.red("ERROR: Unable to find Cloud Image with profileid '" + cloudProfileId + "' and image-name-prefix '" + program.agentprefix + "'.  Exiting with code 7."));
+  console.log(colors.red("ERROR: Unable to find Cloud Image with profileid '" + cloudProfileId + "' and " + agentPrefixProperty + " '" + program.agentprefix + "'.  Exiting with code 7."));
   process.exit(7);
 }
 
-function updateCloudImage(cloudImage, callback) {
+function updateCloudImage(cloudProfile, cloudImage, callback) {
   var host = program.server.replace(/https?:\/\//, '')
-  var path = '/app/rest/projects/id:_Root/projectFeatures/type:CloudImage,property(name:image-name-prefix,value:' + program.agentprefix + ')/properties/amazon-id'
+  var cloudCode = getFeatureProperty(cloudProfile, 'cloud-code')
+  var agentPrefixProperty = cloudCode == 'amazon' ? 'image-name-prefix' : 'source-id';
+  var imageProperty = cloudCode == 'amazon' ? 'amazon-id' : 'imageId';
+  var path = '/app/rest/projects/id:_Root/projectFeatures/type:CloudImage,property(name:' + agentPrefixProperty + ',value:' + program.agentprefix + ')/properties/' + imageProperty;
   var req = http.request({
     host: host,
     path: path,
@@ -298,14 +303,16 @@ function updateCloudImage(cloudImage, callback) {
 getRootProjectFeatures(function (features) {
   var cloudProfile = getCloudProfile(features);
   var cloudImage = getCloudImage(cloudProfile, features);
-  var ami = getFeatureProperty(cloudImage, 'amazon-id');
-  if (ami == program.image) {
+  var imageProperty = getFeatureProperty(cloudProfile, 'cloud-code') == 'amazon' ? 'amazon-id' : 'imageId';
+
+  var currentImage = getFeatureProperty(cloudImage, imageProperty);
+  if (currentImage == program.image) {
     console.log(colors.cyan("INFO: TeamCity cloud profile '" + program.cloudprofile + "', image '" + program.agentprefix + "' is already set to use '" + program.image + "'"));
   } else {
-    console.log(colors.cyan("INFO: TeamCity cloud profile '" + program.cloudprofile + "', image '" + program.agentprefix + "' is currently set to use '" + ami + "'. Updating to use '" + program.image + "'."));
-    setFeatureProperty(cloudImage, 'amazon-id', program.image);
-    updateCloudImage(cloudImage, function() {
-      disableOldAgents(ami);
+    console.log(colors.cyan("INFO: TeamCity cloud profile '" + program.cloudprofile + "', image '" + program.agentprefix + "' is currently set to use '" + currentImage + "'. Updating to use '" + program.image + "'."));
+    setFeatureProperty(cloudImage, imageProperty, program.image);
+    updateCloudImage(cloudProfile, cloudImage, function() {
+      disableOldAgents(currentImage);
     });
   }
 });
