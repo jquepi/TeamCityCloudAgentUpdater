@@ -67,7 +67,12 @@ function getAgentDetails(href, callback) {
   }).end();
 }
 
-function disableAgent(agent, image) {
+function shortenImage(image) {
+  //azure image id's are long and split with `/`. Humans only really care about the last segment.
+  var splitImage = image.split('/')
+  return splitImage[splitImage.length - 1]
+}
+
   var req = http.request({
     host: program.server.replace(/https?:\/\//, ''),
     path: agent.href + "/enabledInfo",
@@ -106,8 +111,7 @@ function disableAgent(agent, image) {
     req.abort();
   });
 
-   //todo: needs shortening in the case of azure
-  req.write("<enabledInfo status='false'><comment><text>Disabling agent as it uses base image " + image + ", which has been superseded by base image " + program.image + ".</text></comment></enabledInfo>");
+  req.write("<enabledInfo status='false'><comment><text>Disabling agent as it uses base image " + shortenImage(oldImage) + ", which has been superseded by base image " + shortenImage(program.image) + ".</text></comment></enabledInfo>");
 
   req.end();
 }
