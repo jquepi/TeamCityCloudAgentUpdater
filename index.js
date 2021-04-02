@@ -73,6 +73,7 @@ function shortenImage(image) {
   return splitImage[splitImage.length - 1]
 }
 
+function disableAgent(agent, oldImage, newImage) {
   var req = http.request({
     host: program.server.replace(/https?:\/\//, ''),
     path: agent.href + "/enabledInfo",
@@ -111,7 +112,7 @@ function shortenImage(image) {
     req.abort();
   });
 
-  req.write("<enabledInfo status='false'><comment><text>Disabling agent as it uses base image " + shortenImage(oldImage) + ", which has been superseded by base image " + shortenImage(program.image) + ".</text></comment></enabledInfo>");
+  req.write("<enabledInfo status='false'><comment><text>Disabling agent as it uses base image " + shortenImage(oldImage) + ", which has been superseded by base image " + shortenImage(newImage) + ".</text></comment></enabledInfo>");
 
   req.end();
 }
@@ -143,30 +144,30 @@ function checkAgentMatches(agent, image, success, failure) {
     }
 }
 
-function disableAgentWith(agents, image) {
+function disableAgentWith(agents, oldImage, newImage) {
   var failureCount = 0;
   agents.forEach(function(agent) {
       getAgentDetails(agent.href, function(agentDetails) {
         var success = function(agent) {
-            disableAgent(agent, image);
+            disableAgent(agent, oldImage, newImage);
         };
         var failure = function () {
           failureCount++;
           if (failureCount == agents.length) {
-            console.log(colors.cyan("INFO: No agents with image = '" + image + "' found. Nothing to disable."));
+            console.log(colors.cyan("INFO: No agents with image = '" + oldImage + "' found. Nothing to disable."));
           }
         };
 
-        checkAgentMatches(agentDetails, image, success, failure);
+        checkAgentMatches(agentDetails, oldImage, success, failure);
       })
     })
 }
 
-function disableOldAgents(oldImage) {
+function disableOldAgents(oldImage, newImage) {
   console.log(colors.cyan("INFO: Attempting to disable teamcity agents that use image " + oldImage));
   getAuthorisedAgents(function(response) {
     var agents = response.agent;
-    disableAgentWith(agents, oldImage);
+    disableAgentWith(agents, oldImage, newImage);
   });
 }
 
@@ -254,7 +255,7 @@ var getCloudImage = function(cloudProfile, response) {
   process.exit(7);
 }
 
-function updateCloudImage(cloudProfile, cloudImage, callback) {
+function updateCloudImage(cloudProfile, cloudImage, newImage, callback) {
   var host = program.server.replace(/https?:\/\//, '')
   var cloudCode = getFeatureProperty(cloudProfile, 'cloud-code')
   var agentPrefixProperty = cloudCode === 'amazon' ? 'image-name-prefix' : 'source-id';
@@ -299,9 +300,18 @@ function updateCloudImage(cloudProfile, cloudImage, callback) {
     process.exit(10);
   });
 
-  req.write(program.image);
+  req.write(newImage);
 
   req.end();
+}
+
+var tweakImageName = function(cloudProfile, cloudImage, newImage) {
+  if (getFeatureProperty(cloudProfile, 'cloud-code') !== 'arm')
+    return newImage;
+  //azure teamcity plugin mangles the resource id by capitalising the resource group name
+  //see https://github.com/JetBrains/teamcity-azure-agent/issues/129
+  var groupId = getFeatureProperty(cloudImage, 'groupId');
+  return newImage.replace(groupId, groupId.toUpperCase())
 }
 
 getRootProjectFeatures(function (features) {
@@ -310,13 +320,14 @@ getRootProjectFeatures(function (features) {
   var imageProperty = getFeatureProperty(cloudProfile, 'cloud-code') === 'amazon' ? 'amazon-id' : 'imageId';
 
   var currentImage = getFeatureProperty(cloudImage, imageProperty);
-  if (currentImage == program.image) {
-    console.log(colors.cyan("INFO: TeamCity cloud profile '" + program.cloudprofile + "', image '" + program.agentprefix + "' is already set to use '" + program.image + "'"));
+  var newImage = tweakImageName(cloudProfile, cloudImage, program.image);
+  if (currentImage == newImage) {
+    console.log(colors.cyan("INFO: TeamCity cloud profile '" + program.cloudprofile + "', image '" + program.agentprefix + "' is already set to use '" + newImage + "'"));
   } else {
-    console.log(colors.cyan("INFO: TeamCity cloud profile '" + program.cloudprofile + "', image '" + program.agentprefix + "' is currently set to use '" + currentImage + "'. Updating to use '" + program.image + "'."));
-    setFeatureProperty(cloudImage, imageProperty, program.image);
-    updateCloudImage(cloudProfile, cloudImage, function() {
-      disableOldAgents(currentImage);
+    console.log(colors.cyan("INFO: TeamCity cloud profile '" + program.cloudprofile + "', image '" + program.agentprefix + "' is currently set to use '" + currentImage + "'. Updating to use '" + newImage + "'."));
+    setFeatureProperty(cloudImage, imageProperty, newImage);
+    updateCloudImage(cloudProfile, cloudImage, newImage, function() {
+      disableOldAgents(currentImage, newImage);
     });
   }
 });
