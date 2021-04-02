@@ -234,7 +234,7 @@ var getCloudImage = function(cloudProfile, response) {
   var cloudProfileId = cloudProfile.id;
   var features = response.projectFeature;
   var returnFeature;
-  var agentPrefixProperty = getFeatureProperty(cloudProfile, 'cloud-code') == 'amazon' ? 'image-name-prefix' : 'source-id';
+  var agentPrefixProperty = getFeatureProperty(cloudProfile, 'cloud-code') === 'amazon' ? 'image-name-prefix' : 'source-id';
   features.forEach(function(feature) {
     if (feature.type === 'CloudImage') {
       if (getFeatureProperty(feature, 'profileId') === cloudProfileId) {
@@ -253,8 +253,8 @@ var getCloudImage = function(cloudProfile, response) {
 function updateCloudImage(cloudProfile, cloudImage, callback) {
   var host = program.server.replace(/https?:\/\//, '')
   var cloudCode = getFeatureProperty(cloudProfile, 'cloud-code')
-  var agentPrefixProperty = cloudCode == 'amazon' ? 'image-name-prefix' : 'source-id';
-  var imageProperty = cloudCode == 'amazon' ? 'amazon-id' : 'imageId';
+  var agentPrefixProperty = cloudCode === 'amazon' ? 'image-name-prefix' : 'source-id';
+  var imageProperty = cloudCode === 'amazon' ? 'amazon-id' : 'imageId';
   var path = '/app/rest/projects/id:_Root/projectFeatures/type:CloudImage,property(name:' + agentPrefixProperty + ',value:' + program.agentprefix + ')/properties/' + imageProperty;
   var req = http.request({
     host: host,
@@ -303,7 +303,7 @@ function updateCloudImage(cloudProfile, cloudImage, callback) {
 getRootProjectFeatures(function (features) {
   var cloudProfile = getCloudProfile(features);
   var cloudImage = getCloudImage(cloudProfile, features);
-  var imageProperty = getFeatureProperty(cloudProfile, 'cloud-code') == 'amazon' ? 'amazon-id' : 'imageId';
+  var imageProperty = getFeatureProperty(cloudProfile, 'cloud-code') === 'amazon' ? 'amazon-id' : 'imageId';
 
   var currentImage = getFeatureProperty(cloudImage, imageProperty);
   if (currentImage == program.image) {
