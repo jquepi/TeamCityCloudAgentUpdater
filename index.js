@@ -61,6 +61,10 @@ function getAgentDetails(href, callback) {
           body += d;
       });
       response.on('end', function() {
+          if (response.statusCode !== 200) {
+            body = `{}`;
+            console.log(colors.yellow("WARN: Server returned status code " + response.statusCode + " when trying to get agent details from '" + href + "'. Ignoring this agent and moving on."));
+          }
           var parsed = JSON.parse(body);
           callback(parsed);
       });
@@ -283,7 +287,7 @@ function updateCloudImage(cloudProfile, cloudImage, newImage, callback) {
           body += d;
       });
       response.on('end', function() {
-        console.log(colors.gray("VERBOSE" + body));
+        console.log(colors.gray("VERBOSE: " + body));
         callback();
       });
   });
