@@ -17,17 +17,18 @@ var fail = function(message) {
   console.log(colors.red("ERROR: " + message));
   process.exit(1);
 };
-if (!program.token || program.token == "") fail('Option "token" was not supplied.')
-if (!program.server || program.server == "") fail('Option "server" was not supplied.')
-if (!program.image || program.image == "") fail('Option "image" was not supplied.')
-if (!program.cloudprofile || program.cloudprofile == "") fail('Option "cloudprofile" was not supplied.')
-if (!program.agentprefix || program.agentprefix == "") fail('Option "agentprefix" was not supplied.')
+const options = program.opts();
+if (!options.token || options.token == "") fail('Option "token" was not supplied.')
+if (!options.server || options.server == "") fail('Option "server" was not supplied.')
+if (!options.image || options.image == "") fail('Option "image" was not supplied.')
+if (!options.cloudprofile || options.cloudprofile == "") fail('Option "cloudprofile" was not supplied.')
+if (!options.agentprefix || options.agentprefix == "") fail('Option "agentprefix" was not supplied.')
 
-var auth = "Bearer " + program.token;
+var auth = "Bearer " + options.token;
 
 function getAuthorisedAgents(callback) {
   http.get({
-    host: program.server.replace(/https?:\/\//, ''),
+    host: options.server.replace(/https?:\/\//, ''),
     path: '/app/rest/agents?locator=authorized:true',
     headers: {
       'accept': 'application/json',
@@ -48,7 +49,7 @@ function getAuthorisedAgents(callback) {
 
 function getAgentDetails(href, callback) {
   http.get({
-    host: program.server.replace(/https?:\/\//, ''),
+    host: options.server.replace(/https?:\/\//, ''),
     path: href,
     headers: {
       'accept': 'application/json',
@@ -79,13 +80,13 @@ function shortenImage(image) {
 
 function disableAgent(agent, oldImage, newImage) {
   var req = http.request({
-    host: program.server.replace(/https?:\/\//, ''),
+    host: options.server.replace(/https?:\/\//, ''),
     path: agent.href + "/enabledInfo",
     method: 'PUT',
     headers: {
       'content-type': 'application/xml',
       'Authorization' : auth,
-      'Origin': program.server
+      'Origin': options.server
     },
     agent: false
   }, function(response) {
@@ -177,7 +178,7 @@ function disableOldAgents(oldImage, newImage) {
 
 var getRootProjectFeatures = function(callback) {
   http.get({
-    host: program.server.replace(/https?:\/\//, ''),
+    host: options.server.replace(/https?:\/\//, ''),
     path: '/app/rest/projects/id:_Root/projectFeatures',
     headers: {
       'accept': 'application/json',
@@ -228,14 +229,14 @@ var getCloudProfile = function(response) {
   var returnFeature;
   features.forEach(function(feature) {
     if (feature.type === 'CloudProfile') {
-      if (getFeatureProperty(feature, 'name') == program.cloudprofile) {
+      if (getFeatureProperty(feature, 'name') == options.cloudprofile) {
         returnFeature = feature;
       }
     }
   });
   if (returnFeature)
     return returnFeature;
-  console.log(colors.red("ERROR: Unable to find Cloud Profile '" + program.cloudprofile + "'. Exiting with code 6."));
+  console.log(colors.red("ERROR: Unable to find Cloud Profile '" + options.cloudprofile + "'. Exiting with code 6."));
   process.exit(6);
 }
 
@@ -247,7 +248,7 @@ var getCloudImage = function(cloudProfile, response) {
   features.forEach(function(feature) {
     if (feature.type === 'CloudImage') {
       if (getFeatureProperty(feature, 'profileId') === cloudProfileId) {
-        if (getFeatureProperty(feature, agentPrefixProperty) === program.agentprefix) {
+        if (getFeatureProperty(feature, agentPrefixProperty) === options.agentprefix) {
           returnFeature = feature;
         }
       }
@@ -255,16 +256,16 @@ var getCloudImage = function(cloudProfile, response) {
   });
   if (returnFeature)
     return returnFeature;
-  console.log(colors.red("ERROR: Unable to find Cloud Image with profileid '" + cloudProfileId + "' and " + agentPrefixProperty + " '" + program.agentprefix + "'.  Exiting with code 7."));
+  console.log(colors.red("ERROR: Unable to find Cloud Image with profileid '" + cloudProfileId + "' and " + agentPrefixProperty + " '" + options.agentprefix + "'.  Exiting with code 7."));
   process.exit(7);
 }
 
 function updateCloudImage(cloudProfile, cloudImage, newImage, callback) {
-  var host = program.server.replace(/https?:\/\//, '')
+  var host = options.server.replace(/https?:\/\//, '')
   var cloudCode = getFeatureProperty(cloudProfile, 'cloud-code')
   var agentPrefixProperty = cloudCode === 'amazon' ? 'image-name-prefix' : 'source-id';
   var imageProperty = cloudCode === 'amazon' ? 'amazon-id' : 'imageId';
-  var path = '/app/rest/projects/id:_Root/projectFeatures/type:CloudImage,property(name:' + agentPrefixProperty + ',value:' + program.agentprefix + ')/properties/' + imageProperty;
+  var path = '/app/rest/projects/id:_Root/projectFeatures/type:CloudImage,property(name:' + agentPrefixProperty + ',value:' + options.agentprefix + ')/properties/' + imageProperty;
   var req = http.request({
     host: host,
     path: path,
@@ -272,7 +273,7 @@ function updateCloudImage(cloudProfile, cloudImage, newImage, callback) {
     headers: {
       'Authorization': auth,
       'Content-type': 'text/plain',
-      'Origin': program.server
+      'Origin': options.server
     }
   }, function(response) {
       if (('' + response.statusCode).match(/^2\d\d$/)) {
@@ -324,11 +325,11 @@ getRootProjectFeatures(function (features) {
   var imageProperty = getFeatureProperty(cloudProfile, 'cloud-code') === 'amazon' ? 'amazon-id' : 'imageId';
 
   var currentImage = getFeatureProperty(cloudImage, imageProperty);
-  var newImage = tweakImageName(cloudProfile, cloudImage, program.image);
+  var newImage = tweakImageName(cloudProfile, cloudImage, options.image);
   if (currentImage == newImage) {
-    console.log(colors.cyan("INFO: TeamCity cloud profile '" + program.cloudprofile + "', image '" + program.agentprefix + "' is already set to use '" + newImage + "'"));
+    console.log(colors.cyan("INFO: TeamCity cloud profile '" + options.cloudprofile + "', image '" + options.agentprefix + "' is already set to use '" + newImage + "'"));
   } else {
-    console.log(colors.cyan("INFO: TeamCity cloud profile '" + program.cloudprofile + "', image '" + program.agentprefix + "' is currently set to use '" + currentImage + "'. Updating to use '" + newImage + "'."));
+    console.log(colors.cyan("INFO: TeamCity cloud profile '" + options.cloudprofile + "', image '" + options.agentprefix + "' is currently set to use '" + currentImage + "'. Updating to use '" + newImage + "'."));
     setFeatureProperty(cloudImage, imageProperty, newImage);
     updateCloudImage(cloudProfile, cloudImage, newImage, function() {
       disableOldAgents(currentImage, newImage);
