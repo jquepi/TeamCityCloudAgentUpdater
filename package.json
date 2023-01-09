@@ -18,6 +18,6 @@
   "homepage": "https://github.com/OctopusDeploy/TeamCityCloudAgentUpdater#readme",
   "dependencies": {
     "colors": "1.4.0",
-    "commander": "9.4.1"
+    "commander": "9.5.0"
   }
 }
